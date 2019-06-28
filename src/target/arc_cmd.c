@@ -599,6 +599,31 @@ int jim_arc_add_reg(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
 	return e;
 }
 
+/* arc set-reg-exists ($reg_name)+
+ * Accepts any amount of register names - will set them as existing in a loop.*/
+COMMAND_HANDLER(arc_set_reg_exists)
+{
+	struct target * const target = get_current_target(CMD_CTX);
+
+	if (CMD_ARGC == 0) {
+		command_print(CMD, "At least one register name must be specified.");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	for (unsigned int i = 0; i < CMD_ARGC; i++) {
+		const char * const reg_name = CMD_ARGV[i];
+		struct reg * const r = arc_register_get_by_name(target->reg_cache, reg_name, true);
+
+		if (!r) {
+			command_print(CMD, "Register `%s' is not found.", reg_name);
+			return ERROR_COMMAND_ARGUMENT_INVALID;
+		}
+
+		r->exist = true;
+	}
+
+	return JIM_OK;
+}
 
 /* ----- Exported target commands ------------------------------------------ */
 
@@ -633,6 +658,14 @@ static const struct command_registration arc_core_command_handlers[] = {
 		"are requried options. GDB regnum will default to previous register "
 		"(gdbnum + 1) and shouldn't be specified in most cases. Type "
 		"defaults to default GDB 'int'.",
+	},
+	{
+		.name = "set-reg-exists",
+		.handler = arc_set_reg_exists,
+		.mode = COMMAND_ANY,
+		.usage = "arc set-reg-exists ?register-name?+",
+		.help = "Set that register exists. Accepts multiple register names as "
+			"arguments.",
 	},
 	COMMAND_REGISTRATION_DONE
 };

@@ -239,6 +239,7 @@ int arc_halt(struct target *target);
 int arc_poll(struct target *target);
 int arc_assert_reset(struct target *target);
 int arc_deassert_reset(struct target *target);
+int arc_arch_state(struct target *target);
 
 
 #endif /* ARC_H */

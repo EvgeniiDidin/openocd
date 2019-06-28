@@ -53,7 +53,7 @@ struct target_type arcv2_target = {
 
 	.poll =	arc_poll,
 
-	.arch_state = NULL,
+	.arch_state = arc_arch_state,
 
 	/* TODO That seems like something similiar to metaware hostlink, so perhaps
 	 * we can exploit this in the future. */

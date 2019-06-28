@@ -930,3 +930,17 @@ int arc_deassert_reset(struct target *target)
 
 	return ERROR_OK;
 }
+
+int arc_arch_state(struct target *target)
+{
+	if (debug_level < LOG_LVL_DEBUG)
+		return ERROR_OK;
+
+	uint32_t pc_value;
+	CHECK_RETVAL(arc_get_register_value(target, "pc", &pc_value));
+	LOG_DEBUG("target state: %s;  PC at: 0x%08" PRIx32,
+		target_state_name(target),
+		pc_value);
+
+	return ERROR_OK;
+}

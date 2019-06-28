@@ -942,3 +942,90 @@ int arc_arch_state(struct target *target)
 
 	return ERROR_OK;
 }
+
+/**
+ * See arc_save_context() for reason why we want to dump all regs at once.
+ * This however means that if there are dependencies between registers they
+ * will not be observable until target will be resumed.
+ */
+static int arc_restore_context(struct target *target)
+{
+	int retval = ERROR_OK;
+	unsigned int i;
+	struct arc_common *arc = target_to_arc(target);
+	struct reg *reg_list = arc->core_cache->reg_list;
+
+	LOG_DEBUG("Restoring registers values");
+	assert(reg_list);
+
+	/* It is assumed that there is at least one AUX register in the list. */
+	const uint32_t core_regs_size = arc->num_core_regs  * sizeof(uint32_t);
+	const uint32_t aux_regs_size =  arc->num_aux_regs * sizeof(uint32_t);
+	uint32_t *core_values = malloc(core_regs_size);
+	uint32_t *aux_values = malloc(aux_regs_size);
+	uint32_t *core_addrs = malloc(core_regs_size);
+	uint32_t *aux_addrs = malloc(aux_regs_size);
+	unsigned int core_cnt = 0;
+	unsigned int aux_cnt = 0;
+
+	if (!core_values || !core_addrs || !aux_values || !aux_addrs)  {
+		LOG_ERROR("Not enough memory");
+		retval = ERROR_FAIL;
+		goto exit;
+	}
+
+	memset(core_values, 0xdeadbeef, core_regs_size);
+	memset(core_addrs, 0xdeadbeef, core_regs_size);
+	memset(aux_values, 0xdeadbeef, aux_regs_size);
+	memset(aux_addrs, 0xdeadbeef, aux_regs_size);
+
+	for (i = 0; i < arc->num_core_regs; i++) {
+		struct reg *reg = &(reg_list[i]);
+		struct arc_reg_t *arc_reg = reg->arch_info;
+		if (reg->valid && reg->exist && reg->dirty) {
+			LOG_DEBUG("Will write regnum=%u", i);
+			core_addrs[core_cnt] = arc_reg->desc->arch_num;
+			core_values[core_cnt] = arc_reg->value;
+			core_cnt += 1;
+		}
+	}
+
+	for (i = 0; i < arc->num_aux_regs; i++) {
+		struct reg *reg = &(reg_list[arc->num_core_regs + i]);
+		struct arc_reg_t *arc_reg = reg->arch_info;
+		if (reg->valid && reg->exist && reg->dirty) {
+			LOG_DEBUG("Will write regnum=%lu", arc->num_core_regs + i);
+			aux_addrs[aux_cnt] = arc_reg->desc->arch_num;
+			aux_values[aux_cnt] = arc_reg->value;
+			aux_cnt += 1;
+		}
+	}
+
+	/* Write data to target.
+	 * Check before write, if aux and core count is greater than 0. */
+	if (core_cnt > 0) {
+		retval = arc_jtag_write_core_reg(&arc->jtag_info, core_addrs, core_cnt, core_values);
+		if (ERROR_OK != retval) {
+			LOG_ERROR("Attempt to write to core registers failed.");
+			retval = ERROR_FAIL;
+			goto exit;
+		}
+	}
+
+	if (aux_cnt > 0) {
+		retval = arc_jtag_write_aux_reg(&arc->jtag_info, aux_addrs, aux_cnt, aux_values);
+		if (ERROR_OK != retval) {
+			LOG_ERROR("Attempt to write to aux registers failed.");
+			retval = ERROR_FAIL;
+			goto exit;
+		}
+	}
+
+exit:
+	free(core_values);
+	free(core_addrs);
+	free(aux_values);
+	free(aux_addrs);
+
+	return retval;
+}

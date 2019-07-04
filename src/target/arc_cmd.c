@@ -779,6 +779,94 @@ static int jim_arc_get_aux_reg(Jim_Interp *interp, int argc, Jim_Obj * const *ar
 
 	return ERROR_OK;
 }
+
+static int jim_arc_get_core_reg(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
+{
+	Jim_GetOptInfo goi;
+	Jim_GetOpt_Setup(&goi, interp, argc-1, argv+1);
+
+	if (goi.argc != 1) {
+		Jim_SetResultFormatted(goi.interp,
+			"usage: %s <core_reg_num>", Jim_GetString(argv[0], NULL));
+		return JIM_ERR;
+	}
+
+	struct command_context *context;
+	struct target *target;
+
+	context = current_command_context(interp);
+	assert(context);
+
+	target = get_current_target(context);
+	if (!target) {
+		Jim_SetResultFormatted(goi.interp, "No current target");
+		return JIM_ERR;
+	}
+
+	/* Register number */
+	uint32_t regnum;
+	JIM_CHECK_RETVAL(arc_cmd_jim_get_uint32(&goi, &regnum));
+	if (regnum > 63 || regnum == 61 || regnum == 62) {
+		Jim_SetResultFormatted(goi.interp, "Core register number %i " \
+			"is invalid. Must less then 64 and not 61 and 62.", regnum);
+		return JIM_ERR;
+	}
+
+	uint32_t value;
+	struct arc_common *arc = target_to_arc(target);
+	assert(arc);
+
+  /* Read value */
+	CHECK_RETVAL(arc_jtag_read_core_reg_one(&arc->jtag_info, regnum, &value));
+	Jim_SetResultInt(interp, value);
+
+	return ERROR_OK;
+}
+
+static int jim_arc_set_core_reg(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
+{
+	Jim_GetOptInfo goi;
+	Jim_GetOpt_Setup(&goi, interp, argc-1, argv+1);
+
+	if (goi.argc != 2) {
+		Jim_SetResultFormatted(goi.interp,
+			"usage: %s <core_reg_num> <core_reg_value>", Jim_GetString(argv[0], NULL));
+		return JIM_ERR;
+	}
+
+	struct command_context *context;
+	struct target *target;
+
+	context = current_command_context(interp);
+	assert(context);
+
+	target = get_current_target(context);
+	if (!target) {
+		Jim_SetResultFormatted(goi.interp, "No current target");
+		return JIM_ERR;
+	}
+
+	/* Register number */
+	uint32_t regnum;
+	JIM_CHECK_RETVAL(arc_cmd_jim_get_uint32(&goi, &regnum));
+	if (regnum > 63 || regnum == 61 || regnum == 62) {
+		Jim_SetResultFormatted(goi.interp, "Core register number %i " \
+			"is invalid. Must less then 64 and not 61 and 62.", regnum);
+		return JIM_ERR;
+	}
+
+	/* Register value */
+	uint32_t value;
+  JIM_CHECK_RETVAL(arc_cmd_jim_get_uint32(&goi, &value));
+
+	struct arc_common *arc = target_to_arc(target);
+	assert(arc);
+
+	CHECK_RETVAL(arc_jtag_write_core_reg_one(&arc->jtag_info, regnum, value));
+
+	return ERROR_OK;
+}
+
 static const struct command_registration arc_jtag_command_group[] = {
 	{
 		.name = "get-aux-reg",
@@ -799,6 +887,26 @@ static const struct command_registration arc_jtag_command_group[] = {
 			"and thus is unsafe and can have unexpected consequences. "\
 			"Use at your own risk.",
 		.usage = "<regnum> <value>"
+	},
+	{
+		.name = "get-core-reg",
+		.jim_handler = jim_arc_get_core_reg,
+		.mode = COMMAND_EXEC,
+		.help = "Get/Set core register by number. This command does a " \
+			"raw JTAG request that bypasses OpenOCD register cache "\
+			"and thus is unsafe and can have unexpected consequences. "\
+			"Use at your own risk.",
+		.usage = "<regnum> [<value>]"
+	},
+	{
+		.name = "set-core-reg",
+		.jim_handler = jim_arc_set_core_reg,
+		.mode = COMMAND_EXEC,
+		.help = "Get/Set core register by number. This command does a " \
+			"raw JTAG request that bypasses OpenOCD register cache "\
+			"and thus is unsafe and can have unexpected consequences. "\
+			"Use at your own risk.",
+		.usage = "<regnum> [<value>]"
 	},
 	COMMAND_REGISTRATION_DONE
 };

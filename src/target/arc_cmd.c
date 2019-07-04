@@ -34,6 +34,15 @@
  *
  * ------------------------------------------------------------------------- */
 
+
+static int arc_cmd_jim_get_uint32(Jim_GetOptInfo *goi, uint32_t *value)
+{
+	jim_wide value_wide;
+	JIM_CHECK_RETVAL(Jim_GetOpt_Wide(goi, &value_wide));
+	*value = (uint32_t)value_wide;
+	return JIM_OK;
+}
+
 /* Add flags register data type */
 enum add_reg_type_flags {
 	CFG_ADD_REG_TYPE_FLAGS_NAME,
@@ -692,6 +701,108 @@ int jim_arc_get_reg_field(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
 	return JIM_OK;
 }
 
+static int jim_arc_set_aux_reg(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
+{
+	Jim_GetOptInfo goi;
+	Jim_GetOpt_Setup(&goi, interp, argc-1, argv+1);
+
+	if ( goi.argc != 2) {
+		Jim_SetResultFormatted(goi.interp,
+			"usage: %s <aux_reg_num> <aux_reg_value>", Jim_GetString(argv[0], NULL));
+		return JIM_ERR;
+	}
+
+	struct command_context *context;
+	struct target *target;
+
+	context = current_command_context(interp);
+	assert(context);
+
+	target = get_current_target(context);
+	if (!target) {
+		Jim_SetResultFormatted(goi.interp, "No current target");
+		return JIM_ERR;
+	}
+
+	uint32_t regnum;
+	uint32_t value;
+
+	/* Register number */
+	JIM_CHECK_RETVAL(arc_cmd_jim_get_uint32(&goi, &regnum));
+
+	/* Register value */
+	JIM_CHECK_RETVAL(arc_cmd_jim_get_uint32(&goi, &value));
+
+
+	struct arc_common *arc = target_to_arc(target);
+	assert(arc);
+
+	CHECK_RETVAL(arc_jtag_write_aux_reg_one(&arc->jtag_info, regnum, value));
+
+	return ERROR_OK;
+}
+
+static int jim_arc_get_aux_reg(Jim_Interp *interp, int argc, Jim_Obj * const *argv)
+{
+	Jim_GetOptInfo goi;
+	Jim_GetOpt_Setup(&goi, interp, argc-1, argv+1);
+
+	if (goi.argc != 1) {
+		Jim_SetResultFormatted(goi.interp,
+			"usage: %s <aux_reg_num>", Jim_GetString(argv[0], NULL));
+		return JIM_ERR;
+	}
+
+	struct command_context *context;
+	struct target *target;
+
+	context = current_command_context(interp);
+	assert(context);
+
+	target = get_current_target(context);
+	if (!target) {
+		Jim_SetResultFormatted(goi.interp, "No current target");
+		return JIM_ERR;
+	}
+
+	uint32_t regnum;
+	uint32_t value;
+
+	/* Register number */
+	JIM_CHECK_RETVAL(arc_cmd_jim_get_uint32(&goi, &regnum));
+
+	struct arc_common *arc = target_to_arc(target);
+	assert(arc);
+
+	CHECK_RETVAL(arc_jtag_read_aux_reg_one(&arc->jtag_info, regnum, &value));
+	Jim_SetResultInt(interp, value);
+
+	return ERROR_OK;
+}
+static const struct command_registration arc_jtag_command_group[] = {
+	{
+		.name = "get-aux-reg",
+		.jim_handler = jim_arc_get_aux_reg,
+		.mode = COMMAND_EXEC,
+		.help = "Get AUX register by number. This command does a " \
+			"raw JTAG request that bypasses OpenOCD register cache "\
+			"and thus is unsafe and can have unexpected consequences. "\
+			"Use at your own risk.",
+		.usage = "<regnum>"
+	},
+	{
+		.name = "set-aux-reg",
+		.jim_handler = jim_arc_set_aux_reg,
+		.mode = COMMAND_EXEC,
+		.help = "Set AUX register by number. This command does a " \
+			"raw JTAG request that bypasses OpenOCD register cache "\
+			"and thus is unsafe and can have unexpected consequences. "\
+			"Use at your own risk.",
+		.usage = "<regnum> <value>"
+	},
+	COMMAND_REGISTRATION_DONE
+};
+
 
 
 /* ----- Exported target commands ------------------------------------------ */
@@ -742,6 +853,13 @@ static const struct command_registration arc_core_command_handlers[] = {
 		.mode = COMMAND_ANY,
 		.usage = "?regname? ?field_name?",
 		.help = "Returns value of field in a register with 'struct' type.",
+	},
+	{
+		.name = "jtag",
+		.mode = COMMAND_ANY,
+		.help = "ARC JTAG specific commands",
+		.usage = "",
+		.chain = arc_jtag_command_group,
 	},
 	COMMAND_REGISTRATION_DONE
 };

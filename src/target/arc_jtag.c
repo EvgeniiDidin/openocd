@@ -87,7 +87,6 @@ static void arc_jtag_write_ir(struct arc_jtag *jtag_info, uint32_t
 	 * thus this memory will be repurposed before jtag_execute_queue() will be
 	 * invoked. */
 	jtag_add_ir_scan(tap, &field, jtag_info->tap_end_state);
-	exit(1);
 
 }
 

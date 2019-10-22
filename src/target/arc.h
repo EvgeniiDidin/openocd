@@ -241,5 +241,7 @@ int arc_assert_reset(struct target *target);
 int arc_deassert_reset(struct target *target);
 int arc_arch_state(struct target *target);
 
+int arc_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
+	int *reg_list_size, enum target_register_class reg_class);
 
 #endif /* ARC_H */

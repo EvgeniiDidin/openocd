@@ -69,7 +69,7 @@ struct target_type arcv2_target = {
 	/* TODO Implement soft_reset_halt */
 	.soft_reset_halt = NULL,
 
-	.get_gdb_reg_list = NULL,
+	.get_gdb_reg_list = arc_regs_get_gdb_reg_list,
 
 	.read_memory = NULL,
 	.write_memory = NULL,

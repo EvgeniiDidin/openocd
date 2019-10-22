@@ -419,6 +419,59 @@ const struct reg_arch_type arc_reg_type = {
 	.set = arc_regs_set_core_reg,
 };
 
+/* */
+int arc_regs_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
+	int *reg_list_size, enum target_register_class reg_class)
+{
+	assert(target->reg_cache);
+	struct arc_common *arc = target_to_arc(target);
+
+	/* get pointers to arch-specific information storage */
+	*reg_list_size = arc->num_regs;
+	*reg_list = calloc(*reg_list_size, sizeof(struct reg *));
+
+	/* OpenOCD gdb_server API seems to be inconsistent here: when it generates
+	 * XML tdesc it filters out !exist registers, however when creating a
+	 * g-packet it doesn't do so. REG_CLASS_ALL is used in first case, and
+	 * REG_CLASS_GENERAL used in the latter one. Due to this we had to filter
+	 * out !exist register for "general", but not for "all". Attempts to filter out
+	 * !exist for "all" as well will cause a failed check in OpenOCD GDB
+	 * server. */
+	if (reg_class == REG_CLASS_ALL) {
+		unsigned long i = 0;
+		struct reg_cache *reg_cache = target->reg_cache;
+		while (reg_cache != NULL) {
+			for (unsigned j = 0; j < reg_cache->num_regs; j++, i++) {
+				(*reg_list)[i] =  &reg_cache->reg_list[j];
+			}
+			reg_cache = reg_cache->next;
+		}
+		assert(i == arc->num_regs);
+		LOG_DEBUG("REG_CLASS_ALL: number of regs=%i", *reg_list_size);
+	} else {
+		unsigned long i = 0;
+		unsigned long gdb_reg_number = 0;
+		struct reg_cache *reg_cache = target->reg_cache;
+		while (reg_cache != NULL) {
+			for (unsigned j = 0;
+				 j < reg_cache->num_regs && gdb_reg_number <= arc->last_general_reg;
+				 j++) {
+				if (reg_cache->reg_list[j].exist) {
+					(*reg_list)[i] =  &reg_cache->reg_list[j];
+					i++;
+				}
+				gdb_reg_number += 1;
+			}
+			reg_cache = reg_cache->next;
+		}
+		*reg_list_size = i;
+		LOG_DEBUG("REG_CLASS_GENERAL: number of regs=%i", *reg_list_size);
+	}
+
+	return ERROR_OK;
+}
+
+
 /* Reading field of struct_type register */
 int arc_get_register_field(struct target *target, const char *reg_name,
 		const char *field_name, uint32_t *value_ptr)

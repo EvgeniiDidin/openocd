@@ -71,7 +71,7 @@ struct target_type arcv2_target = {
 
 	.get_gdb_reg_list = arc_regs_get_gdb_reg_list,
 
-	.read_memory = NULL,
+	.read_memory = arc_mem_read,
 	.write_memory = NULL,
 	.checksum_memory = NULL,
 	.blank_check_memory = NULL,

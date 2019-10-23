@@ -492,3 +492,120 @@ int arc_jtag_read_aux_reg(struct arc_jtag *jtag_info, uint32_t *addr,
 	return arc_jtag_read_registers(jtag_info, ARC_JTAG_AUX_REG, addr, count,
 			buffer);
 }
+
+/**
+ * Write a sequence of 4-byte words into target memory.
+ *
+ * We can write only 4byte words via JTAG, so any non-word writes should be
+ * handled at higher levels by read-modify-write.
+ *
+ * This function writes directly to the memory, leaving any caches (if there
+ * are any) in inconsistent state. It is responsibility of upper level to
+ * resolve this.
+ *
+ * @param jtag_info
+ * @param addr		Address of first word to write into.
+ * @param count		Amount of word to write.
+ * @param buffer	Array to write into memory.
+ */
+int arc_jtag_write_memory(struct arc_jtag *jtag_info, uint32_t addr,
+		uint32_t count, const uint32_t* buffer)
+{
+	assert(jtag_info != NULL);
+	assert(buffer != NULL);
+
+	LOG_DEBUG("Writing to memory: addr=0x%08" PRIx32 ";count=%" PRIu32 ";buffer[0]=0x%08" PRIx32,
+		addr, count, *buffer);
+
+	/* No need to waste time on useless operations. */
+	if (count == 0)
+		return ERROR_OK;
+
+	/* We do not know where we come from. */
+	arc_jtag_reset_transaction(jtag_info);
+
+	/* We want to write to memory. */
+	arc_jtag_set_transaction(jtag_info, ARC_JTAG_WRITE_TO_MEMORY, TAP_DRPAUSE);
+
+	/* Set target memory address of the first word. */
+	arc_jtag_write_ir(jtag_info, ARC_ADDRESS_REG);
+	arc_jtag_write_dr(jtag_info, addr, TAP_DRPAUSE);
+
+	/* Start sending words. Address is auto-incremented on 4bytes by HW. */
+	arc_jtag_write_ir(jtag_info, ARC_DATA_REG);
+
+	uint32_t i;
+	for (i = 0; i < count; i++) {
+		arc_jtag_write_dr(jtag_info, *(buffer + i), TAP_IDLE);
+	}
+
+	CHECK_RETVAL(jtag_execute_queue());
+
+	return ERROR_OK;
+}
+
+/**
+ * Read a sequence of 4-byte words from target memory.
+ *
+ * We can read only 4byte words via JTAG.
+ *
+ * This function read directly from the memory, so it can read invalid data if
+ * data cache hasn't been flushed before hand. It is responsibility of upper
+ * level to resolve this.
+ *
+ * @param jtag_info
+ * @param addr		Address of first word to read from.
+ * @param count		Amount of words to read.
+ * @param buffer	Array of words to read into.
+ * @param slow_memory	Whether this is a slow memory (DDR) or fast (CCM).
+ */
+int arc_jtag_read_memory(struct arc_jtag *jtag_info, uint32_t addr,
+	uint32_t count, uint32_t *buffer, bool slow_memory)
+{
+	assert(jtag_info != NULL);
+	assert(jtag_info->tap != NULL);
+
+	LOG_DEBUG("Reading memory: addr=0x%" PRIx32 ";count=%" PRIu32 ";slow=%c",
+		addr, count, slow_memory?'Y':'N');
+
+	if (count == 0)
+		return ERROR_OK;
+
+	arc_jtag_reset_transaction(jtag_info);
+
+	/* We are reading from memory. */
+	arc_jtag_set_transaction(jtag_info, ARC_JTAG_READ_FROM_MEMORY, TAP_DRPAUSE);
+
+	/* Read data */
+	uint8_t *data_buf = calloc(sizeof(uint8_t), count * 4);
+	uint32_t i;
+	for (i = 0; i < count; i++) {
+		/* When several words are read at consequent addresses we can
+		 * rely on ARC JTAG auto-incrementing address. That means that
+		 * address can be set only once, for a first word. However it
+		 * has been noted that at least in some cases when reading from
+		 * DDR, JTAG returns 0 instead of a real value. To workaround
+		 * this issue we need to do totally non-required address
+		 * writes, which however resolve a problem by introducing
+		 * delay. See STAR 9000832538... */
+		if (slow_memory || i == 0) {
+		    /* Set address */
+		    arc_jtag_write_ir(jtag_info, ARC_ADDRESS_REG);
+		    arc_jtag_write_dr(jtag_info, addr + i * 4, TAP_IDLE);
+
+		    arc_jtag_write_ir(jtag_info, ARC_DATA_REG);
+		}
+		arc_jtag_read_dr(jtag_info, data_buf + i * 4, TAP_IDLE);
+	}
+
+	CHECK_RETVAL(jtag_execute_queue());
+
+	/* Convert byte-buffers to host presentation. */
+	for (i = 0; i < count; i++)
+		buffer[i] = buf_get_u32(data_buf + 4*i, 0, 32);
+
+	free(data_buf);
+
+	return ERROR_OK;
+}
+

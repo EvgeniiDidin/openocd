@@ -47,6 +47,10 @@
 
 #define AUX_STATUS32_REG_HALT_BIT       (1)
 
+#define AUX_IRQ_ENABLE_REG			0x40C
+#define SET_CORE_DISABLE_INTERRUPTS		0x0
+#define SET_CORE_ENABLE_INTERRUPTS		0x1
+
 /* Register data type */
 struct arc_reg_data_type {
        struct list_head list;
@@ -242,6 +246,7 @@ int arc_poll(struct target *target);
 int arc_assert_reset(struct target *target);
 int arc_deassert_reset(struct target *target);
 int arc_arch_state(struct target *target);
+int arc_enable_interrupts(struct target *target, int enable);
 
 int arc_regs_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
 	int *reg_list_size, enum target_register_class reg_class);

@@ -1081,3 +1081,24 @@ exit:
 
 	return retval;
 }
+
+int arc_enable_interrupts(struct target *target, int enable)
+{
+	uint32_t value;
+
+	struct arc_common *arc = target_to_arc(target);
+
+	if (enable) {
+		/* enable interrupts */
+		value = SET_CORE_ENABLE_INTERRUPTS;
+		CHECK_RETVAL(arc_jtag_write_aux_reg_one(&arc->jtag_info, AUX_IRQ_ENABLE_REG, value));
+		LOG_DEBUG("interrupts enabled");
+	} else {
+		/* disable interrupts */
+		value = SET_CORE_DISABLE_INTERRUPTS;
+		CHECK_RETVAL(arc_jtag_write_aux_reg_one(&arc->jtag_info, AUX_IRQ_ENABLE_REG, value));
+		LOG_DEBUG("interrupts disabled");
+	}
+
+	return ERROR_OK;
+}

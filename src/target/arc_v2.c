@@ -63,8 +63,8 @@ struct target_type arcv2_target = {
 	.resume = NULL,
 	.step = NULL,
 
-	.assert_reset = NULL,
-	.deassert_reset = NULL,
+	.assert_reset = arc_assert_reset,
+	.deassert_reset = arc_deassert_reset,
 
 	/* TODO Implement soft_reset_halt */
 	.soft_reset_halt = NULL,

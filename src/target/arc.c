@@ -861,3 +861,68 @@ int arc_poll(struct target *target)
 
 	return ERROR_OK;
 }
+
+int arc_assert_reset(struct target *target)
+{
+	struct arc_common *arc = target_to_arc(target);
+	enum reset_types jtag_reset_config = jtag_get_reset_config();
+        bool srst_asserted = false;
+
+        LOG_DEBUG("target->state: %s", target_state_name(target));
+
+	if (target_has_event_action(target, TARGET_EVENT_RESET_ASSERT)) {
+		/* allow scripts to override the reset event */
+
+		target_handle_event(target, TARGET_EVENT_RESET_ASSERT);
+		register_cache_invalidate(arc->core_cache);
+		 /* An ARC target might be in halt state after reset, so
+		 * if script requested processor to resume, then it must
+		 * be manually started to ensure that this request
+		 * is satisfied. */
+		if (target->state == TARGET_HALTED && !target->reset_halt) {
+			/* Resume the target and continue from the current
+			 * PC register value. */
+			LOG_DEBUG("Starting CPU execution after reset");
+			CHECK_RETVAL(target_resume(target, 1, 0, 0, 0));
+		}
+		target->state = TARGET_RESET;
+
+		return ERROR_OK;
+	}
+
+	/* some cores support connecting while srst is asserted
+	 * use that mode if it has been configured */
+	if (!(jtag_reset_config & RESET_SRST_PULLS_TRST) &&
+			(jtag_reset_config & RESET_SRST_NO_GATING)) {
+		jtag_add_reset(0, 1);
+		srst_asserted = true;
+	}
+
+	if (jtag_reset_config & RESET_HAS_SRST) {
+		/* should issue a srst only, but we may have to assert trst as well */
+		if (jtag_reset_config & RESET_SRST_PULLS_TRST)
+			jtag_add_reset(1, 1);
+		else if (!srst_asserted)
+			jtag_add_reset(0, 1);
+	}
+
+	target->state = TARGET_RESET;
+	jtag_add_sleep(50000);
+
+	register_cache_invalidate(arc->core_cache);
+
+	if (target->reset_halt)
+		CHECK_RETVAL(target_halt(target));
+
+	return ERROR_OK;
+}
+
+int arc_deassert_reset(struct target *target)
+{
+	LOG_DEBUG("target->state: %s", target_state_name(target));
+
+	/* deassert reset lines */
+	jtag_add_reset(0, 0);
+
+	return ERROR_OK;
+}

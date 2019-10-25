@@ -42,7 +42,12 @@
 #define ARC_COMMON_MAGIC	0xB32EB324  /* just a unique number */
 
 #define AUX_DEBUG_REG                   0x5
+#define AUX_PC_REG                      0x6
+#define AUX_STATUS32_REG                0xA
+
 #define SET_CORE_FORCE_HALT             (1 << 1)
+#define SET_CORE_HALT_BIT               (1)      /* STATUS32[0] = H field */
+
 
 #define AUX_STATUS32_REG_HALT_BIT       (1)
 
@@ -246,6 +251,8 @@ int arc_assert_reset(struct target *target);
 int arc_deassert_reset(struct target *target);
 int arc_arch_state(struct target *target);
 int arc_enable_interrupts(struct target *target, int enable);
+int arc_resume(struct target *target, int current, target_addr_t address,
+	int handle_breakpoints, int debug_execution);
 
 int arc_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
 	int *reg_list_size, enum target_register_class reg_class);

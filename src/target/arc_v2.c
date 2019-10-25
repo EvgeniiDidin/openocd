@@ -60,7 +60,7 @@ struct target_type arcv2_target = {
 	.target_request_data = NULL,
 
 	.halt = arc_halt,
-	.resume = NULL,
+	.resume = arc_resume,
 	.step = NULL,
 
 	.assert_reset = arc_assert_reset,

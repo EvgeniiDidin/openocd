@@ -1102,3 +1102,73 @@ int arc_enable_interrupts(struct target *target, int enable)
 
 	return ERROR_OK;
 }
+
+int arc_resume(struct target *target, int current, target_addr_t address,
+	int handle_breakpoints, int debug_execution)
+{
+	struct arc_common *arc = target_to_arc(target);
+	uint32_t resume_pc = 0;
+	uint32_t value;
+	struct reg *pc = &arc->core_cache->reg_list[arc->pc_index_in_cache];
+
+	LOG_DEBUG("current:%i, address:0x%08" TARGET_PRIxADDR ", handle_breakpoints(not supported yet):%i, debug_execution:%i",
+		current, address, handle_breakpoints, debug_execution);
+
+	if (target->state != TARGET_HALTED) {
+		LOG_WARNING("target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
+
+	/* current = 1: continue on current PC, otherwise continue at <address> */
+	if (!current) {
+		buf_set_u32(pc->value, 0, 32, address);
+		pc->dirty = 1;
+		pc->valid = 1;
+		LOG_DEBUG("Changing the value of current PC to 0x%08" TARGET_PRIxADDR, address);
+	}
+
+	if (!current)
+		resume_pc = address;
+	else
+		resume_pc = buf_get_u32(pc->value,
+			0, 32);
+
+	arc_restore_context(target);
+
+	LOG_DEBUG("Target resumes from PC=0x%" PRIx32 ", pc.dirty=%i, pc.valid=%i",
+		resume_pc, pc->dirty, pc->valid);
+
+	/* check if GDB tells to set our PC where to continue from */
+	if ((pc->valid == 1) && (resume_pc == buf_get_u32(pc->value, 0, 32))) {
+		value = buf_get_u32(pc->value, 0, 32);
+		LOG_DEBUG("resume Core (when start-core) with PC @:0x%08" PRIx32, value);
+		arc_jtag_write_aux_reg_one(&arc->jtag_info, AUX_PC_REG, value);
+	}
+
+	/* enable interrupts if we are running */
+	arc_enable_interrupts(target, !debug_execution);
+
+	target->debug_reason = DBG_REASON_NOTHALTED;
+
+	/* ready to get us going again */
+	target->state = TARGET_RUNNING;
+	CHECK_RETVAL(arc_jtag_read_aux_reg_one(&arc->jtag_info, AUX_STATUS32_REG, &value));
+	value &= ~SET_CORE_HALT_BIT;        /* clear the HALT bit */
+	CHECK_RETVAL(arc_jtag_write_aux_reg_one(&arc->jtag_info, AUX_STATUS32_REG, value));
+	LOG_DEBUG("Core started to run");
+
+	/* registers are now invalid */
+	register_cache_invalidate(arc->core_cache);
+
+	if (!debug_execution) {
+		target->state = TARGET_RUNNING;
+		target_call_event_callbacks(target, TARGET_EVENT_RESUMED);
+		LOG_DEBUG("target resumed at 0x%08" PRIx32, resume_pc);
+	} else {
+		target->state = TARGET_DEBUG_RUNNING;
+		target_call_event_callbacks(target, TARGET_EVENT_DEBUG_RESUMED);
+		LOG_DEBUG("target debug resumed at 0x%08" PRIx32, resume_pc);
+	}
+
+	return ERROR_OK;
+}

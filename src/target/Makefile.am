@@ -151,7 +151,8 @@ ARC_SRC = \
         %D%/arc.c \
 	%D%/arc_v2.c \
 	%D%/arc_cmd.c \
-	%D%/arc_jtag.c
+	%D%/arc_jtag.c \
+	%D%/arc_mem.c
 
 %C%_libtarget_la_SOURCES += \
 	%D%/algorithm.h \

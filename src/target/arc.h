@@ -37,6 +37,7 @@
 
 #include "arc_jtag.h"
 #include "arc_cmd.h"
+#include "arc_mem.h"
 
 #define ARC_COMMON_MAGIC	0xB32EB324  /* just a unique number */
 

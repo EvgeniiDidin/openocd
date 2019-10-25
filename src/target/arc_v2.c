@@ -88,7 +88,8 @@ struct target_type arcv2_target = {
 	.start_algorithm = NULL,
 	.wait_algorithm = NULL,
 
-	.commands = NULL,
+	.commands = arc_monitor_command_handlers,
+
 	.target_create = arc_v2_target_create,
 	.init_target = arc_v2_init_target,
 	.examine = arc_examine,

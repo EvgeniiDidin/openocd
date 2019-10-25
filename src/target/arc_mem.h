@@ -27,6 +27,8 @@
 
 int arc_mem_read(struct target *target, target_addr_t address, uint32_t size,
 	uint32_t count, uint8_t *buffer);
+int arc_mem_write(struct target *target, target_addr_t address, uint32_t size,
+	uint32_t count, const uint8_t *buffer);
 
 
 #endif /* ARC_MEM_H */
